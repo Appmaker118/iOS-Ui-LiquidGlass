@@ -1,0 +1,1 @@
+IF code For AndroidManifest.xml is pasted from Somewhere, especially Ai, the browser cuts the link and you get error while building app. the correct line to put in the starting (around line 2 or 3) of AndroidfManifest.xml file is: <manifest xmlns:android="http://schemas.android.com/apk/res/android">
