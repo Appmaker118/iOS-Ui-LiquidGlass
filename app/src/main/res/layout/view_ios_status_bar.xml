@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://android.com"
+    android:id="@+id/statusBarRoot"
+    android:layout_width="match_parent"
+    android:layout_height="34dp"
+    android:background="#CC000000"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp">
+
+    <!-- TOP LEFT: Signal, Network Type, Wi-Fi, Battery -->
+    <LinearLayout
+        android:id="@+id/leftCluster"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start|center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.ios27.systemui.ui.IosSignalView
+            android:id="@+id/iosSignalView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/networkTypeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:letterSpacing="-0.02"
+            android:text="5G"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <com.ios27.systemui.ui.IosWifiView
+            android:id="@+id/iosWifiView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp" />
+
+        <com.ios27.systemui.ui.IosBatteryView
+            android:id="@+id/iosBatteryView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp" />
+    </LinearLayout>
+
+    <!-- TOP RIGHT: DND Moon + 24h Time -->
+    <LinearLayout
+        android:id="@+id/rightCluster"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="end|center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.ios27.systemui.ui.IosDndMoonView
+            android:id="@+id/iosDndMoonView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="5dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/iosClockText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:letterSpacing="-0.02"
+            android:text="9:41"
+            android:textColor="#FFFFFF"
+            android:textSize="14.5sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</FrameLayout>
