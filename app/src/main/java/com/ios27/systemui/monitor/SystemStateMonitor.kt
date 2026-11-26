@@ -102,19 +102,32 @@ class SystemStateMonitor(
             addAction(WifiManager.RSSI_CHANGED_ACTION)
             addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
         }
-        context.registerReceiver(systemReceiver, filter)
+        ContextCompat.registerReceiver(
+            context,
+            systemReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-            .build()
-        connectivityManager.registerNetworkCallback(request, networkCallback)
+        try {
+            val request = NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .build()
+            connectivityManager.registerNetworkCallback(request, networkCallback)
+        } catch (_: Exception) {
+        }
 
         registerTelephonyListener()
 
         updateTime()
         updateDnd()
-        val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val batteryIntent = ContextCompat.registerReceiver(
+            context,
+            null,
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         if (batteryIntent != null) updateBattery(batteryIntent)
         updateState(currentState.copy(isLowPowerMode = powerManager.isPowerSaveMode))
         refreshConnectivity()
@@ -172,8 +185,12 @@ class SystemStateMonitor(
     private fun refreshConnectivity() {
         updateWifi()
         val isDataEnabled = try {
-            telephonyManager.isDataEnabled
-        } catch (_: SecurityException) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                telephonyManager.isDataEnabled
+            } else {
+                true
+            }
+        } catch (_: Exception) {
             false
         }
         val netLabel = if (isDataEnabled) resolveNetworkType() else ""
@@ -236,18 +253,18 @@ class SystemStateMonitor(
             modernTelephonyCallback = callback
             try {
                 telephonyManager.registerTelephonyCallback(context.mainExecutor, callback)
-            } catch (_: SecurityException) {
+            } catch (_: Exception) {
             }
         } else {
             @Suppress("DEPRECATION")
             val listener = object : PhoneStateListener() {
-                @Deprecated("Deprecated in Java")
-                override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
-                    val lvl = signalStrength?.level ?: 0
-                    updateState(currentState.copy(signalLevel = lvl))
-                }
-                @Deprecated("Deprecated in Java")
-             override fun onServiceStateChanged(serviceState: ServiceState?) {
+@Deprecated("Deprecated in Java")
+override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
+val lvl = signalStrength?.level ?: 0
+updateState(currentState.copy(signalLevel = lvl))
+}
+@Deprecated("Deprecated in Java")
+override fun onServiceStateChanged(serviceState: ServiceState?) {
 val inService = serviceState?.state == ServiceState.STATE_IN_SERVICE
 updateState(currentState.copy(hasCellularService = inService))
 }
@@ -259,11 +276,12 @@ telephonyManager.listen(
 listener,
 PhoneStateListener.LISTEN_SIGNAL_STRENGTHS or PhoneStateListener.LISTEN_SERVICE_STATE
 )
-} catch (_: SecurityException) {
+} catch (_: Exception) {
 }
 }
 }
 private fun unregisterTelephonyListener() {
+try {
 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 (modernTelephonyCallback as? TelephonyCallback)?.let {
 telephonyManager.unregisterTelephonyCallback(it)
@@ -273,6 +291,8 @@ telephonyManager.unregisterTelephonyCallback(it)
 legacyPhoneListener?.let {
 telephonyManager.listen(it, PhoneStateListener.LISTEN_NONE)
 }
+}
+} catch (_: Exception) {
 }
 }
 private fun updateState(newState: StatusBarState) {
