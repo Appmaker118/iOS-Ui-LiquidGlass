@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.ios27.systemui.databinding.ActivityMainBinding
+import com.ios27.systemui.physics.IosSpringPhysics
 import com.ios27.systemui.service.StatusBarOverlayService
 
 class MainActivity : AppCompatActivity() {
@@ -28,21 +29,28 @@ class MainActivity : AppCompatActivity() {
     ) {
         if (Settings.canDrawOverlays(this)) {
             startStatusBarService()
+        } else {
+            binding.statusText.text = "Please allow 'Appear on top' permission in Settings."
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        try {
+            binding = ActivityMainBinding.inflate(layoutInflater)
+            setContentView(binding.root)
 
-        binding.btnEnableStatusBar.setOnClickListener {
-            requestRequiredPermissions()
-        }
+            // Attach bouncy spring physics to buttons
+            IosSpringPhysics.attachBouncyTouch(binding.btnEnableStatusBar) {
+                requestRequiredPermissions()
+            }
 
-        binding.btnStopStatusBar.setOnClickListener {
-            stopService(Intent(this, StatusBarOverlayService::class.java))
-            binding.statusText.text = "Status bar stopped."
+            IosSpringPhysics.attachBouncyTouch(binding.btnStopStatusBar) {
+                stopService(Intent(this, StatusBarOverlayService::class.java))
+                binding.statusText.text = "Status bar stopped."
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -68,19 +76,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkOverlayAndStart() {
         if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            overlayLauncher.launch(intent)
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                overlayLauncher.launch(intent)
+            } catch (e: Exception) {
+                binding.statusText.text = "Open Settings > Apps > iOS 27 SystemUI > Appear on top"
+            }
         } else {
             startStatusBarService()
         }
     }
 
     private fun startStatusBarService() {
-        val serviceIntent = Intent(this, StatusBarOverlayService::class.java)
-        ContextCompat.startForegroundService(this, serviceIntent)
-        binding.statusText.text = "iOS 27 Status Bar is Active!"
+        try {
+            val serviceIntent = Intent(this, StatusBarOverlayService::class.java)
+            ContextCompat.startForegroundService(this, serviceIntent)
+            binding.statusText.text = "iOS 27 Status Bar is Active!"
+        } catch (e: Exception) {
+            binding.statusText.text = "Error starting overlay: ${e.message}"
+        }
     }
 }
