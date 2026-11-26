@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.WallpaperColors
 import android.app.WallpaperManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -115,22 +116,23 @@ class StatusBarOverlayService : Service() {
 
     /**
      * Automatically adapts status bar icons to White or Black depending on Wallpaper luminance
-     * and system Dark/Light mode (just like iOS adaptive status bar).
+     * (compatible with Android 10 through Android 14+).
      */
     private fun detectAdaptiveTint() {
         var useDarkIcons = false
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            try {
-                val wm = WallpaperManager.getInstance(this)
-                val colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
-                if (colors != null) {
-                    val supportsDarkText =
-                        (colors.colorHints and WallpaperManager.HINT_SUPPORTS_DARK_TEXT) != 0
-                    useDarkIcons = supportsDarkText
+        try {
+            val wm = WallpaperManager.getInstance(this)
+            val colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+            if (colors != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    useDarkIcons =
+                        (colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0
+                } else {
+                    useDarkIcons = colors.primaryColor.luminance() > 0.65f
                 }
-            } catch (_: Exception) {
             }
+        } catch (_: Exception) {
         }
 
         val tint = if (useDarkIcons) Color.BLACK else Color.WHITE
