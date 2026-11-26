@@ -5,9 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -21,72 +23,87 @@ class StatusBarOverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
     private lateinit var binding: ViewIosStatusBarBinding
-    private lateinit var stateMonitor: SystemStateMonitor
+    private var stateMonitor: SystemStateMonitor? = null
+    private var isViewAttached = false
 
     override fun onCreate() {
         super.onCreate()
         startForegroundNotification()
 
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        binding = ViewIosStatusBarBinding.inflate(LayoutInflater.from(this))
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            dpToPx(34),
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+        if (!Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return
         }
 
-        binding.root.setOnApplyWindowInsetsListener { view, insets ->
-            val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                insets.displayCutout
-            } else null
+        try {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            binding = ViewIosStatusBarBinding.inflate(LayoutInflater.from(this))
 
-            var leftPad = dpToPx(16)
-            var rightPad = dpToPx(16)
-            var barHeight = dpToPx(34)
-
-            if (cutout != null) {
-                if (cutout.safeInsetTop > barHeight) {
-                    barHeight = cutout.safeInsetTop + dpToPx(4)
-                }
-                for (rect in cutout.boundingRects) {
-                    if (rect.left < resources.displayMetrics.widthPixels / 3) {
-                        leftPad = rect.right + dpToPx(8)
-                    }
-                    if (rect.right > (resources.displayMetrics.widthPixels * 2) / 3) {
-                        rightPad = (resources.displayMetrics.widthPixels - rect.left) + dpToPx(8)
-                    }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                dpToPx(34),
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
                 }
             }
 
-            view.setPadding(leftPad, 0, rightPad, 0)
-            if (params.height != barHeight) {
-                params.height = barHeight
-                windowManager.updateViewLayout(binding.root, params)
+            binding.root.setOnApplyWindowInsetsListener { view, insets ->
+                val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    insets.displayCutout
+                } else null
+
+                var leftPad = dpToPx(16)
+                var rightPad = dpToPx(16)
+                var barHeight = dpToPx(34)
+
+                if (cutout != null) {
+                    if (cutout.safeInsetTop > barHeight) {
+                        barHeight = cutout.safeInsetTop + dpToPx(4)
+                    }
+                    for (rect in cutout.boundingRects) {
+                        if (rect.left < resources.displayMetrics.widthPixels / 3) {
+                            leftPad = rect.right + dpToPx(8)
+                        }
+                        if (rect.right > (resources.displayMetrics.widthPixels * 2) / 3) {
+                            rightPad = (resources.displayMetrics.widthPixels - rect.left) + dpToPx(8)
+                        }
+                    }
+                }
+
+                view.setPadding(leftPad, 0, rightPad, 0)
+                if (params.height != barHeight) {
+                    params.height = barHeight
+                    if (isViewAttached) {
+                        windowManager.updateViewLayout(binding.root, params)
+                    }
+                }
+                insets
             }
-            insets
-        }
 
-        windowManager.addView(binding.root, params)
+            windowManager.addView(binding.root, params)
+            isViewAttached = true
 
-        stateMonitor = SystemStateMonitor(this) { state ->
-            renderState(state)
+            stateMonitor = SystemStateMonitor(this) { state ->
+                renderState(state)
+            }
+            stateMonitor?.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopSelf()
         }
-        stateMonitor.start()
     }
 
     private fun renderState(state: StatusBarState) {
+        if (!isViewAttached) return
         binding.iosClockText.text = state.timeText
         binding.iosDndMoonView.visibility = if (state.isDndOn) View.VISIBLE else View.GONE
 
@@ -123,7 +140,7 @@ class StatusBarOverlayService : Service() {
         val channel = NotificationChannel(
             channelId,
             "iOS 27 Status Bar Service",
-            NotificationManager.IMPORTANCE_MIN
+            NotificationManager.IMPORTANCE_LOW
         )
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
@@ -131,11 +148,19 @@ class StatusBarOverlayService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("iOS 27 UI Active")
             .setContentText("Custom status bar running")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-        startForeground(101, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                101,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(101, notification)
+        }
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -143,9 +168,13 @@ class StatusBarOverlayService : Service() {
     }
 
     override fun onDestroy() {
-        stateMonitor.stop()
-        if (::binding.isInitialized) {
-            windowManager.removeView(binding.root)
+        stateMonitor?.stop()
+        if (isViewAttached && ::binding.isInitialized) {
+            try {
+                windowManager.removeView(binding.root)
+            } catch (_: Exception) {
+            }
+            isViewAttached = false
         }
         super.onDestroy()
     }
