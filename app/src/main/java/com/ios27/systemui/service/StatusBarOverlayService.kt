@@ -4,8 +4,11 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.WallpaperManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -25,6 +28,7 @@ class StatusBarOverlayService : Service() {
     private lateinit var binding: ViewIosStatusBarBinding
     private var stateMonitor: SystemStateMonitor? = null
     private var isViewAttached = false
+    private var currentTintColor: Int = Color.WHITE
 
     override fun onCreate() {
         super.onCreate()
@@ -92,6 +96,8 @@ class StatusBarOverlayService : Service() {
             windowManager.addView(binding.root, params)
             isViewAttached = true
 
+            detectAdaptiveTint()
+
             stateMonitor = SystemStateMonitor(this) { state ->
                 renderState(state)
             }
@@ -100,6 +106,53 @@ class StatusBarOverlayService : Service() {
             e.printStackTrace()
             stopSelf()
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        detectAdaptiveTint()
+    }
+
+    /**
+     * Automatically adapts status bar icons to White or Black depending on Wallpaper luminance
+     * and system Dark/Light mode (just like iOS adaptive status bar).
+     */
+    private fun detectAdaptiveTint() {
+        var useDarkIcons = false
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            try {
+                val wm = WallpaperManager.getInstance(this)
+                val colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+                if (colors != null) {
+                    val supportsDarkText =
+                        (colors.colorHints and WallpaperManager.HINT_SUPPORTS_DARK_TEXT) != 0
+                    useDarkIcons = supportsDarkText
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        val tint = if (useDarkIcons) Color.BLACK else Color.WHITE
+        applyIconTint(tint)
+    }
+
+    fun applyIconTint(color: Int) {
+        if (!isViewAttached || currentTintColor == color) return
+        currentTintColor = color
+
+        val shadowColor = if (color == Color.WHITE) Color.parseColor("#45000000") else Color.TRANSPARENT
+
+        binding.iosSignalView.iconColor = color
+        binding.iosWifiView.iconColor = color
+        binding.iosBatteryView.baseColor = color
+        binding.iosDndMoonView.iconColor = color
+
+        binding.networkTypeText.setTextColor(color)
+        binding.networkTypeText.setShadowLayer(2f, 0f, 1f, shadowColor)
+
+        binding.iosClockText.setTextColor(color)
+        binding.iosClockText.setShadowLayer(2f, 0f, 1f, shadowColor)
     }
 
     private fun renderState(state: StatusBarState) {
